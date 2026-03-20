@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 
 const healthRoutes        = require('./routes/health.routes');
 const authRoutes          = require('./routes/auth.routes');
@@ -26,6 +27,14 @@ app.use('/api/agent',   agentSettingsRoutes);
 app.use('/api/emails',  emailRoutes);
 app.use('/api/export',    exportRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+
+// Serve static files from the project root
+app.use(express.static(path.join(__dirname, '..')));
+
+// Root page
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'smartmail_agent.html'));
+});
 
 // 404 handler
 app.use((req, res) => {
