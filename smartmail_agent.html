@@ -1,0 +1,1569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartMail Agent</title>
+  <style>
+    /* ── Reset & Fonts ─────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Animated gradient background ─────────────────────────────────────── */
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      color: #1e293b;
+      min-height: 100vh;
+      background: linear-gradient(-45deg, #e8f0fe, #f0f9ff, #ecfdf5, #f0f4f8, #eef2ff);
+      background-size: 400% 400%;
+      animation: gradientShift 18s ease infinite;
+      position: relative;
+    }
+    @keyframes gradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ── Particle canvas ───────────────────────────────────────────────────── */
+    #particle-canvas {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 0; opacity: .55;
+    }
+
+    /* ── Toast notifications ───────────────────────────────────────────────── */
+    #toast-container {
+      position: fixed; top: 20px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .toast {
+      min-width: 280px; max-width: 380px; padding: 14px 18px;
+      border-radius: 10px; font-size: 14px; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,.15);
+      animation: slideIn .3s ease;
+      display: flex; align-items: center; gap: 10px;
+      backdrop-filter: blur(8px);
+    }
+    .toast.success { background: rgba(16,185,129,.92); color: #fff; }
+    .toast.error   { background: rgba(239,68,68,.92);  color: #fff; }
+    .toast.info    { background: rgba(59,130,246,.92); color: #fff; }
+    @keyframes slideIn {
+      from { transform: translateX(120%); opacity: 0; }
+      to   { transform: translateX(0);    opacity: 1; }
+    }
+
+    /* ── Ripple ────────────────────────────────────────────────────────────── */
+    .ripple-host { position: relative; overflow: hidden; }
+    .ripple-wave {
+      position: absolute; border-radius: 50%;
+      background: rgba(255,255,255,.4);
+      transform: scale(0); animation: rippleAnim .55s linear;
+      pointer-events: none;
+    }
+    @keyframes rippleAnim {
+      to { transform: scale(4); opacity: 0; }
+    }
+
+    /* ── Login Page ────────────────────────────────────────────────────────── */
+    #login-page {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      position: relative; z-index: 1;
+    }
+    .login-card {
+      background: rgba(255,255,255,.78); border-radius: 24px; padding: 48px 40px;
+      width: 100%; max-width: 420px;
+      box-shadow: 0 24px 64px rgba(30,58,95,.18), 0 2px 8px rgba(0,0,0,.06);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.7);
+      animation: popIn .35s ease;
+    }
+    .login-logo { text-align: center; margin-bottom: 32px; }
+    .login-logo .logo-icon {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, #1e3a5f, #0f766e);
+      border-radius: 18px; display: inline-flex; align-items: center; justify-content: center;
+      font-size: 30px; margin-bottom: 14px;
+      box-shadow: 0 8px 24px rgba(30,58,95,.35);
+      animation: floatIcon 3.5s ease-in-out infinite;
+    }
+    @keyframes floatIcon {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-8px); }
+    }
+    .login-logo h1 { font-size: 22px; font-weight: 700; color: #1e293b; }
+    .login-logo p  { font-size: 13px; color: #64748b; margin-top: 4px; }
+    .form-group    { margin-bottom: 20px; }
+    .form-group label  { display: block; font-size: 13px; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .form-group input  {
+      width: 100%; padding: 12px 14px;
+      border: 2px solid rgba(226,232,240,.9); border-radius: 10px;
+      font-size: 14px; transition: border-color .2s, box-shadow .2s; outline: none;
+      background: rgba(255,255,255,.8);
+    }
+    .form-group input:focus {
+      border-color: #1e3a5f;
+      box-shadow: 0 0 0 3px rgba(30,58,95,.12);
+    }
+
+    /* ── Buttons ───────────────────────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 20px; border: none; border-radius: 10px; font-size: 14px;
+      font-weight: 600; cursor: pointer; transition: all .2s; text-decoration: none;
+      position: relative; overflow: hidden;
+    }
+    .btn:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #1e3a5f, #0f766e); color: #fff;
+      box-shadow: 0 4px 14px rgba(30,58,95,.35);
+    }
+    .btn-primary:hover:not(:disabled) {
+      opacity: .92; transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(30,58,95,.4);
+    }
+    .btn-success   { background: #10b981; color: #fff; box-shadow: 0 4px 12px rgba(16,185,129,.3); }
+    .btn-success:hover:not(:disabled) { background: #059669; transform: translateY(-1px); }
+    .btn-danger    { background: #fee2e2; color: #ef4444; }
+    .btn-danger:hover:not(:disabled)  { background: #fecaca; transform: translateY(-1px); }
+    .btn-secondary {
+      background: rgba(241,245,249,.9); color: #475569;
+      border: 1px solid rgba(226,232,240,.8);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #e2e8f0; transform: translateY(-1px); }
+    .btn-glass {
+      background: rgba(255,255,255,.55); color: #1e293b;
+      border: 1px solid rgba(255,255,255,.8);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    }
+    .btn-glass:hover:not(:disabled) {
+      background: rgba(255,255,255,.75); transform: translateY(-2px);
+      box-shadow: 0 4px 18px rgba(0,0,0,.12);
+    }
+    .btn-sm  { padding: 7px 14px; font-size: 12px; border-radius: 8px; }
+    .btn-full { width: 100%; }
+
+    /* ── Back button ───────────────────────────────────────────────────────── */
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 10px; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none;
+      background: rgba(255,255,255,.6); color: #1e3a5f;
+      border: 1px solid rgba(255,255,255,.85);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 2px 12px rgba(30,58,95,.12);
+      transition: all .2s;
+      margin-bottom: 18px;
+    }
+    .back-btn:hover {
+      background: rgba(255,255,255,.85); transform: translateX(-3px);
+      box-shadow: 0 4px 16px rgba(30,58,95,.18);
+    }
+
+    /* ── App Shell ─────────────────────────────────────────────────────────── */
+    #app { display: none; min-height: 100vh; flex-direction: row; position: relative; z-index: 1; }
+    #app.visible { display: flex; }
+
+    /* ── Sidebar ───────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 240px; min-height: 100vh; flex-shrink: 0;
+      background: linear-gradient(180deg, #1a3354 0%, #0d1d36 100%);
+      display: flex; flex-direction: column; padding: 0;
+      box-shadow: 6px 0 32px rgba(0,0,0,.28), 2px 0 8px rgba(0,0,0,.15);
+      transform-style: preserve-3d;
+      position: relative; z-index: 10;
+    }
+    /* 3D depth illusion on sidebar */
+    .sidebar::after {
+      content: '';
+      position: absolute; right: -1px; top: 0; bottom: 0; width: 1px;
+      background: linear-gradient(180deg, rgba(15,118,110,.6), rgba(16,185,129,.3), rgba(15,118,110,.6));
+    }
+    .sidebar-header {
+      padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+    .sidebar-logo { display: flex; align-items: center; gap: 12px; }
+    .sidebar-logo .icon {
+      width: 40px; height: 40px; background: linear-gradient(135deg, #0f766e, #10b981);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+      box-shadow: 0 4px 12px rgba(16,185,129,.4);
+    }
+    .sidebar-logo span { font-weight: 700; font-size: 16px; color: #fff; line-height: 1.2; }
+    .sidebar-logo small { display: block; font-size: 11px; color: rgba(255,255,255,.4); font-weight: 400; }
+
+    .sidebar-user {
+      padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.08);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .avatar {
+      width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #0f766e, #10b981);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; color: #fff; flex-shrink: 0;
+      box-shadow: 0 2px 8px rgba(16,185,129,.35);
+    }
+    .sidebar-user-info { flex: 1; min-width: 0; }
+    .sidebar-user-name  { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sidebar-user-email { font-size: 11px; color: rgba(255,255,255,.45); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .sidebar-nav { flex: 1; padding: 12px 12px; }
+    .nav-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: rgba(255,255,255,.25); padding: 10px 8px 6px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      color: rgba(255,255,255,.6); font-size: 13.5px; font-weight: 500;
+      transition: all .22s; margin-bottom: 2px; position: relative;
+    }
+    .nav-item:hover { background: rgba(255,255,255,.09); color: #fff; }
+    .nav-item.active {
+      background: rgba(255,255,255,.14); color: #fff;
+      box-shadow: inset 0 0 0 1px rgba(16,185,129,.3), 0 0 12px rgba(16,185,129,.12);
+    }
+    /* Glow bar on active nav */
+    .nav-item.active::before {
+      content: '';
+      position: absolute; left: 0; top: 20%; bottom: 20%; width: 3px;
+      background: linear-gradient(180deg, #10b981, #0f766e);
+      border-radius: 0 3px 3px 0;
+      box-shadow: 0 0 8px rgba(16,185,129,.6);
+    }
+    .nav-item .nav-icon { font-size: 17px; flex-shrink: 0; }
+
+    .sidebar-footer { padding: 16px 12px; border-top: 1px solid rgba(255,255,255,.08); }
+
+    /* ── Automation Toggle ─────────────────────────────────────────────────── */
+    .automation-widget {
+      background: rgba(255,255,255,.06); border-radius: 12px;
+      padding: 14px; margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,.08);
+      transition: box-shadow .3s;
+    }
+    .automation-widget.neon-glow {
+      box-shadow: 0 0 16px rgba(16,185,129,.35), inset 0 0 12px rgba(16,185,129,.08);
+      border-color: rgba(16,185,129,.35);
+    }
+    .automation-widget-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .automation-widget-title  { font-size: 12px; font-weight: 600; color: rgba(255,255,255,.8); }
+    .toggle-switch { position: relative; width: 44px; height: 24px; cursor: pointer; }
+    .toggle-switch input { opacity: 0; width: 0; height: 0; }
+    .toggle-track {
+      position: absolute; inset: 0; background: #475569; border-radius: 24px;
+      transition: .3s; box-shadow: inset 0 2px 4px rgba(0,0,0,.3);
+    }
+    .toggle-track::before {
+      content: ''; position: absolute; height: 18px; width: 18px;
+      left: 3px; bottom: 3px; background: #fff; border-radius: 50%;
+      transition: .3s; box-shadow: 0 1px 4px rgba(0,0,0,.3);
+    }
+    .toggle-switch input:checked + .toggle-track { background: #10b981; }
+    .toggle-switch input:checked + .toggle-track::before { transform: translateX(20px); }
+    .automation-status-text { font-size: 11px; color: rgba(255,255,255,.4); }
+    .automation-status-text.on  { color: #10b981; }
+    .automation-status-text.off { color: rgba(255,255,255,.35); }
+
+    /* ── Main Content ──────────────────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+    .topbar {
+      background: rgba(255,255,255,.75); padding: 16px 28px;
+      border-bottom: 1px solid rgba(226,232,240,.7);
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 12px rgba(0,0,0,.06);
+      backdrop-filter: blur(14px);
+    }
+    .page-title    { font-size: 20px; font-weight: 700; color: #1e293b; }
+    .page-subtitle { font-size: 13px; color: #64748b; margin-top: 1px; }
+    .topbar-actions { display: flex; gap: 10px; align-items: center; }
+    .content { flex: 1; padding: 28px; overflow-y: auto; }
+
+    /* ── View transitions ──────────────────────────────────────────────────── */
+    .view { display: none; }
+    .view.active { display: block; animation: viewFadeIn .3s ease; }
+    @keyframes viewFadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Glassmorphism card base ────────────────────────────────────────────── */
+    .card {
+      background: rgba(255,255,255,.72);
+      border-radius: 18px; padding: 24px;
+      box-shadow: 0 4px 24px rgba(30,58,95,.09), 0 1px 4px rgba(0,0,0,.05);
+      margin-bottom: 24px;
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,.75);
+      transition: box-shadow .25s, transform .25s;
+    }
+    .card:hover { box-shadow: 0 8px 32px rgba(30,58,95,.13), 0 2px 8px rgba(0,0,0,.07); }
+    .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .card-title    { font-size: 15px; font-weight: 700; color: #1e293b; }
+    .card-subtitle { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+    /* ── Stat Cards — 3D tilt ──────────────────────────────────────────────── */
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px; margin-bottom: 28px; }
+    .stat-card {
+      background: rgba(255,255,255,.78);
+      border-radius: 18px; padding: 22px 24px;
+      box-shadow: 0 4px 20px rgba(30,58,95,.1), 0 1px 4px rgba(0,0,0,.06);
+      display: flex; align-items: center; gap: 18px;
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255,255,255,.8);
+      transition: transform .15s ease, box-shadow .15s ease;
+      transform-style: preserve-3d;
+      cursor: default;
+    }
+    .stat-card:hover {
+      box-shadow: 0 16px 40px rgba(30,58,95,.16), 0 4px 12px rgba(0,0,0,.09);
+    }
+    .stat-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+    }
+    .stat-icon.blue   { background: linear-gradient(135deg, #dbeafe, #bfdbfe); box-shadow: 0 4px 12px rgba(59,130,246,.2); }
+    .stat-icon.green  { background: linear-gradient(135deg, #d1fae5, #a7f3d0); box-shadow: 0 4px 12px rgba(16,185,129,.2); }
+    .stat-icon.orange { background: linear-gradient(135deg, #ffedd5, #fed7aa); box-shadow: 0 4px 12px rgba(251,146,60,.2); }
+    .stat-icon.purple { background: linear-gradient(135deg, #ede9fe, #ddd6fe); box-shadow: 0 4px 12px rgba(139,92,246,.2); }
+    .stat-value { font-size: 28px; font-weight: 800; color: #1e293b; line-height: 1; }
+    .stat-label { font-size: 12px; color: #64748b; margin-top: 4px; font-weight: 500; }
+
+    /* ── Two-col grid ──────────────────────────────────────────────────────── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 900px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    /* ── Tables ────────────────────────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    thead th {
+      padding: 10px 14px; text-align: left; font-size: 11px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      color: #94a3b8; background: rgba(248,250,252,.8); border-bottom: 1px solid rgba(226,232,240,.7);
+    }
+    tbody tr { transition: background .15s; }
+    tbody tr:hover { background: rgba(248,250,252,.8); }
+    tbody td { padding: 12px 14px; border-bottom: 1px solid rgba(241,245,249,.9); vertical-align: middle; }
+
+    /* ── Badges ────────────────────────────────────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    }
+    .badge-green  { background: #d1fae5; color: #059669; }
+    .badge-blue   { background: #dbeafe; color: #2563eb; }
+    .badge-gray   { background: #f1f5f9; color: #64748b; }
+    .badge-orange { background: #ffedd5; color: #ea580c; }
+    .badge-red    { background: #fee2e2; color: #dc2626; }
+
+    /* ── Folder cards — 3D flip ────────────────────────────────────────────── */
+    .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+    .folder-card-wrap {
+      perspective: 900px;
+      height: 160px;
+    }
+    .folder-card {
+      width: 100%; height: 100%;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform .55s cubic-bezier(.4,0,.2,1);
+      cursor: pointer;
+    }
+    .folder-card-wrap:hover .folder-card { transform: rotateY(180deg); }
+    .folder-card-front,
+    .folder-card-back {
+      position: absolute; inset: 0;
+      backface-visibility: hidden; -webkit-backface-visibility: hidden;
+      border-radius: 16px; padding: 20px;
+      border: 1.5px solid rgba(255,255,255,.8);
+    }
+    .folder-card-front {
+      background: rgba(255,255,255,.78);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 4px 20px rgba(30,58,95,.1);
+      display: flex; flex-direction: column;
+    }
+    .folder-card-back {
+      background: linear-gradient(135deg, rgba(30,58,95,.9), rgba(15,118,110,.9));
+      backdrop-filter: blur(14px);
+      transform: rotateY(180deg);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; color: #fff;
+      box-shadow: 0 4px 20px rgba(30,58,95,.25);
+    }
+    .folder-card-back .back-company { font-size: 15px; font-weight: 700; }
+    .folder-card-back .back-domain  { font-size: 12px; opacity: .75; }
+    .folder-card-back .back-action  {
+      margin-top: 6px; padding: 6px 18px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; background: rgba(255,255,255,.2); color: #fff;
+      border: 1px solid rgba(255,255,255,.35);
+    }
+    .folder-card-back .back-delete {
+      padding: 5px 14px; border-radius: 8px; font-size: 12px;
+      font-weight: 600; background: rgba(239,68,68,.25); color: #fecaca;
+      border: 1px solid rgba(239,68,68,.35); cursor: pointer;
+    }
+
+    .folder-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+    .folder-icon {
+      font-size: 28px;
+      display: inline-block;
+      animation: floatFolderIcon 2.8s ease-in-out infinite;
+    }
+    @keyframes floatFolderIcon {
+      0%,100% { transform: translateY(0) rotate(0deg); }
+      40%     { transform: translateY(-5px) rotate(-3deg); }
+      70%     { transform: translateY(-2px) rotate(2deg); }
+    }
+    .folder-name   { font-size: 15px; font-weight: 700; color: #1e293b; }
+    .folder-domain { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .folder-count  { font-size: 20px; font-weight: 800; color: #1e3a5f; }
+    .folder-count-label { font-size: 11px; color: #94a3b8; }
+
+    /* ── Add folder modal ──────────────────────────────────────────────────── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,30,60,.4);
+      z-index: 1000; align-items: center; justify-content: center;
+      backdrop-filter: blur(6px);
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: rgba(255,255,255,.88); border-radius: 22px; padding: 32px;
+      width: 100%; max-width: 440px;
+      box-shadow: 0 24px 64px rgba(0,0,0,.22);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,.8);
+      animation: popIn .22s ease;
+    }
+    @keyframes popIn { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header   { margin-bottom: 24px; }
+    .modal-title    { font-size: 18px; font-weight: 700; }
+    .modal-subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+    .modal-footer   { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+    /* ── Email row sender ──────────────────────────────────────────────────── */
+    .sender-cell { display: flex; align-items: center; gap: 10px; }
+    .sender-avatar {
+      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 13px; color: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,.15);
+    }
+    .sender-name  { font-size: 13px; font-weight: 600; color: #1e293b; }
+    .sender-email { font-size: 11px; color: #94a3b8; }
+
+    /* ── Empty state + floating email icons ────────────────────────────────── */
+    .empty-state { text-align: center; padding: 60px 20px; color: #94a3b8; position: relative; }
+    .empty-state .empty-icon {
+      font-size: 52px; margin-bottom: 12px; display: inline-block;
+      animation: floatEmpty 3s ease-in-out infinite;
+    }
+    @keyframes floatEmpty {
+      0%,100% { transform: translateY(0); }
+      50%      { transform: translateY(-12px); }
+    }
+    /* Floating mini email icons around empty icon */
+    .empty-state .float-icons {
+      position: absolute; top: 10px; left: 0; right: 0; height: 80px;
+      pointer-events: none;
+    }
+    .float-mini {
+      position: absolute; font-size: 18px; opacity: .25;
+      animation: floatMini 4s ease-in-out infinite;
+    }
+    .float-mini:nth-child(1) { left: 15%; animation-delay: 0s;    animation-duration: 3.8s; }
+    .float-mini:nth-child(2) { left: 75%; animation-delay: .8s;   animation-duration: 4.2s; }
+    .float-mini:nth-child(3) { left: 40%; animation-delay: 1.5s;  animation-duration: 3.5s; }
+    @keyframes floatMini {
+      0%,100% { transform: translateY(0) rotate(-10deg); opacity: .2; }
+      50%      { transform: translateY(-18px) rotate(10deg); opacity: .4; }
+    }
+    .empty-state h3 { font-size: 16px; font-weight: 600; color: #64748b; margin-bottom: 6px; }
+    .empty-state p  { font-size: 13px; }
+
+    /* ── Loading spinner ───────────────────────────────────────────────────── */
+    .spinner {
+      width: 36px; height: 36px; border: 3px solid rgba(226,232,240,.7);
+      border-top-color: #1e3a5f; border-radius: 50%;
+      animation: spin .7s linear infinite; margin: 40px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-row td { text-align: center; padding: 40px; }
+
+    /* ── Company bar chart ─────────────────────────────────────────────────── */
+    .company-bar-item { margin-bottom: 14px; }
+    .company-bar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px; }
+    .company-bar-name  { font-size: 13px; font-weight: 600; color: #334155; }
+    .company-bar-count { font-size: 12px; font-weight: 700; color: #1e3a5f; }
+    .company-bar-track { height: 8px; background: rgba(241,245,249,.9); border-radius: 4px; overflow: hidden; }
+    .company-bar-fill  { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #1e3a5f, #0f766e); transition: width .8s cubic-bezier(.4,0,.2,1); }
+
+    /* ── Read/Unread filter pills ───────────────────────────────────────────── */
+    .filter-pills { display: flex; gap: 6px; }
+    .filter-pill {
+      padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: 1.5px solid rgba(226,232,240,.8);
+      background: rgba(255,255,255,.6); color: #64748b;
+      transition: all .18s; backdrop-filter: blur(6px);
+    }
+    .filter-pill:hover { background: rgba(255,255,255,.9); color: #1e293b; }
+    .filter-pill.active-all    { background: #1e3a5f; color: #fff; border-color: #1e3a5f; box-shadow: 0 2px 8px rgba(30,58,95,.3); }
+    .filter-pill.active-read   { background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 2px 8px rgba(16,185,129,.3); }
+    .filter-pill.active-unread { background: #f59e0b; color: #fff; border-color: #f59e0b; box-shadow: 0 2px 8px rgba(245,158,11,.3); }
+
+    /* ── Read/Unread badges ─────────────────────────────────────────────────── */
+    .badge-read   { background: #d1fae5; color: #059669; }
+    .badge-unread { background: #fef3c7; color: #92400e; font-weight: 700; }
+
+    /* ── Glowing active border on focused inputs ────────────────────────────── */
+    input:focus { outline: none; }
+  </style>
+</head>
+<body>
+
+<!-- ── Particle canvas ─────────────────────────────────────────────────────── -->
+<canvas id="particle-canvas"></canvas>
+
+<!-- ── Toast container ────────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     LOGIN PAGE
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="login-page">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="logo-icon">📬</div>
+      <h1>SmartMail Agent</h1>
+      <p>Autonomous email classification system</p>
+    </div>
+    <div id="login-error" style="display:none; background:rgba(254,226,226,.9); color:#dc2626; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:18px;"></div>
+    <div class="form-group">
+      <label>Email address</label>
+      <input type="email" id="login-email" placeholder="you@example.com" />
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="••••••••" />
+    </div>
+    <button class="btn btn-primary btn-full ripple-host" id="login-btn" onclick="doLogin()">
+      Sign In
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     APP SHELL
+══════════════════════════════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-logo">
+        <div class="icon">📬</div>
+        <div>
+          <span>SmartMail</span>
+          <small>Agent v1.0</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-user">
+      <div class="avatar" id="sb-avatar">U</div>
+      <div class="sidebar-user-info">
+        <div class="sidebar-user-name"  id="sb-name">User</div>
+        <div class="sidebar-user-email" id="sb-email">user@example.com</div>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-label">Main</div>
+      <div class="nav-item active" onclick="showView('dashboard')" data-view="dashboard">
+        <span class="nav-icon">📊</span> Dashboard
+      </div>
+      <div class="nav-item" onclick="showView('folders')" data-view="folders">
+        <span class="nav-icon">🗂️</span> Company Folders
+      </div>
+      <div class="nav-item" onclick="showView('emails')" data-view="emails">
+        <span class="nav-icon">📧</span> Emails
+      </div>
+
+      <div class="nav-label" style="margin-top:8px;">Tools</div>
+      <div class="nav-item" onclick="doExport()">
+        <span class="nav-icon">📥</span> Export Excel
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <!-- Automation Toggle -->
+      <div class="automation-widget" id="automation-widget">
+        <div class="automation-widget-header">
+          <span class="automation-widget-title">🤖 Automation</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="automation-toggle" onchange="toggleAutomation()" />
+            <span class="toggle-track"></span>
+          </label>
+        </div>
+        <div class="automation-status-text off" id="automation-status-text">Disabled</div>
+      </div>
+
+      <div class="nav-item ripple-host" onclick="doLogout()" style="color:#fca5a5;">
+        <span class="nav-icon">🚪</span> Logout
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ────────────────────────────────────────────────────────────── -->
+  <div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div>
+        <div class="page-title" id="topbar-title">Dashboard</div>
+        <div class="page-subtitle" id="topbar-subtitle">Overview of your SmartMail Agent</div>
+      </div>
+      <div class="topbar-actions" id="topbar-actions"></div>
+    </div>
+
+    <!-- Content area -->
+    <div class="content">
+
+      <!-- ── DASHBOARD VIEW ──────────────────────────────────────────────── -->
+      <div class="view active" id="view-dashboard">
+        <div class="stats-grid">
+          <div class="stat-card" id="sc-total">
+            <div class="stat-icon blue">📧</div>
+            <div>
+              <div class="stat-value" id="stat-total">—</div>
+              <div class="stat-label">Total Emails</div>
+            </div>
+          </div>
+          <div class="stat-card" id="sc-folders">
+            <div class="stat-icon green">🗂️</div>
+            <div>
+              <div class="stat-value" id="stat-folders">—</div>
+              <div class="stat-label">Company Folders</div>
+            </div>
+          </div>
+          <div class="stat-card" id="sc-attach">
+            <div class="stat-icon orange">📎</div>
+            <div>
+              <div class="stat-value" id="stat-attachments">—</div>
+              <div class="stat-label">With Attachments</div>
+            </div>
+          </div>
+          <div class="stat-card" id="sc-unclass">
+            <div class="stat-icon purple">❓</div>
+            <div>
+              <div class="stat-value" id="stat-unclassified">—</div>
+              <div class="stat-label">Unclassified</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Company breakdown -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Company Breakdown</div>
+                <div class="card-subtitle">Emails per folder</div>
+              </div>
+            </div>
+            <div id="company-bars"><div class="spinner"></div></div>
+          </div>
+
+          <!-- Recent emails -->
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Recent Emails</div>
+                <div class="card-subtitle">Last 5 received</div>
+              </div>
+              <button class="btn btn-sm btn-secondary ripple-host" onclick="showView('emails')">View All</button>
+            </div>
+            <div id="recent-emails-list"><div class="spinner"></div></div>
+          </div>
+        </div>
+
+        <!-- Cleanup info -->
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Last Cleanup Run</div>
+              <div class="card-subtitle">Monthly maintenance agent</div>
+            </div>
+          </div>
+          <div id="cleanup-info" style="font-size:14px; color:#64748b;">Loading…</div>
+        </div>
+      </div>
+
+      <!-- ── FOLDERS VIEW ────────────────────────────────────────────────── -->
+      <div class="view" id="view-folders">
+
+        <!-- Auto-create toggle banner -->
+        <div class="card" style="margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <div style="width:44px;height:44px;background:linear-gradient(135deg,#dbeafe,#bfdbfe);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;box-shadow:0 4px 12px rgba(59,130,246,.2);">🤖</div>
+              <div>
+                <div style="font-size:15px;font-weight:700;color:#1e293b;">Auto-create Folders</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px;">
+                  When ON — agent creates a new folder for every unknown email domain automatically.
+                </div>
+              </div>
+            </div>
+            <label class="toggle-switch" style="flex-shrink:0;" title="Toggle auto-create folders">
+              <input type="checkbox" id="auto-create-toggle" onchange="toggleAutoCreate()" />
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <!-- Warning shown when OFF -->
+          <div id="auto-create-warning" style="display:none;margin-top:14px;background:rgba(254,243,199,.85);border:1px solid #fcd34d;border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:10px;backdrop-filter:blur(8px);">
+            <span style="font-size:18px;">⚠️</span>
+            <span style="font-size:13px;color:#92400e;font-weight:500;">
+              Only emails matching existing folders will be classified. Emails from unknown domains will be marked <strong>Unclassified</strong>.
+            </span>
+          </div>
+        </div>
+
+        <div id="folder-grid-container"><div class="spinner"></div></div>
+      </div>
+
+      <!-- ── EMAILS VIEW ─────────────────────────────────────────────────── -->
+      <div class="view" id="view-emails">
+        <!-- Back button -->
+        <button class="back-btn ripple-host" id="emails-back-btn" style="display:none;" onclick="goBackFromEmails()">
+          ← Back
+        </button>
+
+        <div class="card" style="margin-bottom:0">
+          <div class="card-header">
+            <div>
+              <div class="card-title" id="emails-view-title">All Emails</div>
+              <div class="card-subtitle" id="emails-view-subtitle">Fetching…</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm btn-secondary ripple-host" id="emails-clear-filter" style="display:none" onclick="clearCompanyFilter()">
+                ✕ Clear Filter
+              </button>
+              <button class="btn btn-sm btn-primary ripple-host" onclick="doExport()">📥 Export</button>
+            </div>
+          </div>
+
+          <!-- Read/Unread filter pills -->
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+            <div class="filter-pills" id="read-filter-pills">
+              <span class="filter-pill active-all"    onclick="setReadFilter('all')"   >All</span>
+              <span class="filter-pill"               onclick="setReadFilter('unread')" >Unread</span>
+              <span class="filter-pill"               onclick="setReadFilter('read')"   >Read</span>
+            </div>
+            <div id="emails-read-stats" style="font-size:12px;color:#64748b;"></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Sender</th>
+                  <th>Subject</th>
+                  <th>Company</th>
+                  <th>Status</th>
+                  <th>Date</th>
+                  <th>Attach.</th>
+                </tr>
+              </thead>
+              <tbody id="emails-tbody">
+                <tr class="loading-row"><td colspan="6"><div class="spinner"></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- Pagination -->
+          <div id="emails-pagination" style="display:flex;gap:8px;justify-content:flex-end;padding-top:16px;"></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ── Add Folder Modal ────────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="folder-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add Company Folder</div>
+      <div class="modal-subtitle">New emails from this domain will be auto-classified here</div>
+    </div>
+    <div class="form-group">
+      <label>Company Name</label>
+      <input type="text" id="folder-company-name" placeholder="e.g. HCL Technologies" />
+    </div>
+    <div class="form-group">
+      <label>Email Domain</label>
+      <input type="text" id="folder-email-domain" placeholder="e.g. hcl.com" />
+    </div>
+    <div id="folder-modal-error" style="display:none; background:#fee2e2; color:#dc2626; padding:10px 14px; border-radius:8px; font-size:13px; margin-bottom:4px;"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary ripple-host" onclick="closeFolderModal()">Cancel</button>
+      <button class="btn btn-primary ripple-host" id="folder-save-btn" onclick="saveFolder()">Create Folder</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT
+══════════════════════════════════════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ── Config ────────────────────────────────────────────────────────────────────
+const API = 'http://localhost:3000/api';
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentUser       = null;
+let currentView       = 'dashboard';
+let emailsPage        = 1;
+let emailsCompanyId   = null;   // null = all emails
+let emailsReadFilter  = 'all';  // 'all' | 'read' | 'unread'
+let prevView          = null;   // for back-button navigation
+
+// ── Token helpers ──────────────────────────────────────────────────────────────
+const getToken  = ()  => localStorage.getItem('sma_token');
+const saveToken = (t) => localStorage.setItem('sma_token', t);
+const saveUser  = (u) => localStorage.setItem('sma_user', JSON.stringify(u));
+const loadUser  = ()  => { try { return JSON.parse(localStorage.getItem('sma_user')); } catch { return null; } };
+
+// ── Fetch wrapper ──────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API}${path}`, { ...opts, headers });
+
+  if (res.status === 401) { doLogout(); throw new Error('Session expired'); }
+
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    return data;
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res;   // return raw response for binary (Excel)
+}
+
+// ── Toast ──────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = { success: '✓', error: '✕', info: 'ℹ' };
+  el.innerHTML = `<span>${icons[type] || 'ℹ'}</span><span>${msg}</span>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ── Date formatter ─────────────────────────────────────────────────────────────
+function fmtDate(raw) {
+  if (!raw) return '—';
+  const d = new Date(raw);
+  return isNaN(d) ? raw : d.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+// ── Sender avatar colour ───────────────────────────────────────────────────────
+const avatarColors = ['#1e3a5f','#0f766e','#7c3aed','#b45309','#be185d','#1d4ed8','#065f46'];
+function avatarColor(str) {
+  let h = 0; for (let i = 0; i < str.length; i++) h += str.charCodeAt(i);
+  return avatarColors[h % avatarColors.length];
+}
+
+// ── Ripple effect ──────────────────────────────────────────────────────────────
+function addRipple(e) {
+  const btn  = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const x    = e.clientX - rect.left - size / 2;
+  const y    = e.clientY - rect.top  - size / 2;
+  const rip  = document.createElement('span');
+  rip.className = 'ripple-wave';
+  rip.style.cssText = `width:${size}px;height:${size}px;left:${x}px;top:${y}px;`;
+  btn.appendChild(rip);
+  rip.addEventListener('animationend', () => rip.remove());
+}
+function initRipples() {
+  document.querySelectorAll('.ripple-host').forEach(el => {
+    el.removeEventListener('click', addRipple);
+    el.addEventListener('click', addRipple);
+  });
+}
+
+// ── Stat card 3D tilt ──────────────────────────────────────────────────────────
+function initTilt() {
+  document.querySelectorAll('.stat-card').forEach(card => {
+    card.addEventListener('mousemove', e => {
+      const r    = card.getBoundingClientRect();
+      const x    = e.clientX - r.left - r.width / 2;
+      const y    = e.clientY - r.top  - r.height / 2;
+      const rotX = (-y / (r.height / 2)) * 8;
+      const rotY = ( x / (r.width  / 2)) * 8;
+      card.style.transform = `perspective(600px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(6px)`;
+    });
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = '';
+    });
+  });
+}
+
+// ── Particle background ────────────────────────────────────────────────────────
+(function initParticles() {
+  const canvas = document.getElementById('particle-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, particles;
+  const PARTICLE_COUNT = 55;
+  const MAX_DIST       = 140;
+  const COLORS         = ['rgba(30,58,95,', 'rgba(15,118,110,', 'rgba(16,185,129,'];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function mkParticle() {
+    return {
+      x:   Math.random() * W,
+      y:   Math.random() * H,
+      vx:  (Math.random() - .5) * .55,
+      vy:  (Math.random() - .5) * .55,
+      r:   Math.random() * 2.5 + 1,
+      col: COLORS[Math.floor(Math.random() * COLORS.length)],
+    };
+  }
+
+  function init() {
+    resize();
+    particles = Array.from({ length: PARTICLE_COUNT }, mkParticle);
+  }
+
+  function frame() {
+    ctx.clearRect(0, 0, W, H);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy;
+      if (p.x < 0) p.x = W; if (p.x > W) p.x = 0;
+      if (p.y < 0) p.y = H; if (p.y > H) p.y = 0;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = p.col + '0.7)';
+      ctx.fill();
+    }
+    for (let i = 0; i < particles.length; i++) {
+      for (let j = i + 1; j < particles.length; j++) {
+        const dx   = particles[i].x - particles[j].x;
+        const dy   = particles[i].y - particles[j].y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < MAX_DIST) {
+          const alpha = (1 - dist / MAX_DIST) * 0.25;
+          ctx.beginPath();
+          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.lineTo(particles[j].x, particles[j].y);
+          ctx.strokeStyle = `rgba(30,58,95,${alpha})`;
+          ctx.lineWidth   = .8;
+          ctx.stroke();
+        }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { resize(); });
+  init();
+  frame();
+})();
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTH
+// ════════════════════════════════════════════════════════════════════════════
+async function doLogin() {
+  const email    = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl    = document.getElementById('login-error');
+  const btn      = document.getElementById('login-btn');
+
+  errEl.style.display = 'none';
+  if (!email || !password) { showLoginError('Please enter email and password.'); return; }
+
+  btn.disabled = true; btn.textContent = 'Signing in…';
+
+  try {
+    const data = await fetch(`${API}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    }).then(r => r.json());
+
+    if (!data.token) throw new Error(data.message || 'Login failed');
+
+    saveToken(data.token);
+    saveUser(data.user);
+    currentUser = data.user;
+    bootApp();
+  } catch (e) {
+    showLoginError(e.message);
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In';
+  }
+}
+
+function showLoginError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function doLogout() {
+  localStorage.removeItem('sma_token');
+  localStorage.removeItem('sma_user');
+  currentUser = null;
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-page').style.display = 'flex';
+  document.getElementById('login-password').value = '';
+  toast('Logged out successfully.', 'info');
+}
+
+// ── Enter key on login ─────────────────────────────────────────────────────────
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+document.getElementById('login-email').addEventListener('keydown',    e => { if (e.key === 'Enter') doLogin(); });
+
+// ════════════════════════════════════════════════════════════════════════════
+// BOOT
+// ════════════════════════════════════════════════════════════════════════════
+function bootApp() {
+  currentUser = currentUser || loadUser();
+  if (!getToken() || !currentUser) return;
+
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+
+  document.getElementById('sb-name').textContent   = currentUser.name  || 'User';
+  document.getElementById('sb-email').textContent  = currentUser.email || '';
+  document.getElementById('sb-avatar').textContent = (currentUser.name || 'U')[0].toUpperCase();
+
+  initRipples();
+  initTilt();
+  showView('dashboard');
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// VIEW ROUTING
+// ════════════════════════════════════════════════════════════════════════════
+const viewMeta = {
+  dashboard: { title: 'Dashboard',        subtitle: 'Overview of your SmartMail Agent', actions: '' },
+  folders:   { title: 'Company Folders',  subtitle: 'Manage email classification folders',
+                actions: '<button class="btn btn-primary btn-sm ripple-host" onclick="openFolderModal()">＋ Add Folder</button>' },
+  emails:    { title: 'Emails',           subtitle: 'Processed & classified emails',
+                actions: '<button class="btn btn-primary btn-sm ripple-host" onclick="doExport()">📥 Export Excel</button>' },
+};
+
+function showView(name) {
+  prevView    = currentView;
+  currentView = name;
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`view-${name}`).classList.add('active');
+  document.querySelectorAll('.nav-item[data-view]').forEach(n => {
+    n.classList.toggle('active', n.dataset.view === name);
+  });
+
+  const meta = viewMeta[name] || {};
+  document.getElementById('topbar-title').textContent    = meta.title    || '';
+  document.getElementById('topbar-subtitle').textContent = meta.subtitle || '';
+  document.getElementById('topbar-actions').innerHTML    = meta.actions  || '';
+
+  // Re-attach ripples for dynamically injected buttons
+  initRipples();
+
+  if (name === 'dashboard') loadDashboard();
+  if (name === 'folders')   loadFolders();
+  if (name === 'emails')    loadEmails();
+}
+
+// ── Back button logic ──────────────────────────────────────────────────────────
+function goBackFromEmails() {
+  const backTo = (emailsCompanyId && prevView === 'folders') ? 'folders' : 'dashboard';
+  if (backTo === 'folders') {
+    emailsCompanyId  = null;
+    emailsPage       = 1;
+    emailsReadFilter = 'all';
+  }
+  showView(backTo);
+}
+
+function updateEmailsBackBtn() {
+  const btn = document.getElementById('emails-back-btn');
+  if (!btn) return;
+  btn.style.display = 'inline-flex';
+  btn.textContent   = emailsCompanyId ? '← Back to Folders' : '← Back';
+}
+
+// ── Read filter ────────────────────────────────────────────────────────────────
+function setReadFilter(filter) {
+  emailsReadFilter = filter;
+  emailsPage       = 1;
+  // Update pill active states
+  document.querySelectorAll('.filter-pill').forEach(p => {
+    p.className = 'filter-pill';
+    if (p.textContent.trim().toLowerCase() === filter ||
+        (filter === 'all' && p.textContent.trim() === 'All')) {
+      p.classList.add(`active-${filter}`);
+    }
+  });
+  loadEmails(1);
+}
+
+// ── Clear company filter ────────────────────────────────────────────────────────
+function clearCompanyFilter() {
+  emailsCompanyId  = null;
+  emailsReadFilter = 'all';
+  emailsPage       = 1;
+  // Reset pills
+  document.querySelectorAll('.filter-pill').forEach(p => p.className = 'filter-pill');
+  document.querySelector('.filter-pill')?.classList.add('active-all');
+  loadEmails(1);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ════════════════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  try {
+    const data = await api('/dashboard');
+    const { summary, company_stats, recent_emails, last_cleanup } = data;
+
+    // Stats
+    document.getElementById('stat-total').textContent        = summary.total_emails;
+    document.getElementById('stat-folders').textContent      = company_stats.length;
+    document.getElementById('stat-attachments').textContent  = summary.emails_with_attachments;
+    document.getElementById('stat-unclassified').textContent = summary.unclassified_count;
+
+    // Automation toggle + neon glow
+    const toggleEl  = document.getElementById('automation-toggle');
+    const statusTxt = document.getElementById('automation-status-text');
+    toggleEl.checked      = summary.automation_enabled;
+    statusTxt.textContent = summary.automation_enabled ? 'Enabled' : 'Disabled';
+    statusTxt.className   = `automation-status-text ${summary.automation_enabled ? 'on' : 'off'}`;
+    applyNeonGlow(summary.automation_enabled);
+
+    // Company bars
+    const maxCount = Math.max(...company_stats.map(c => c.email_count), 1);
+    document.getElementById('company-bars').innerHTML = company_stats.length
+      ? company_stats.map(c => `
+          <div class="company-bar-item">
+            <div class="company-bar-header">
+              <span class="company-bar-name">🗂️ ${esc(c.company_name)}</span>
+              <span class="company-bar-count">${c.email_count}</span>
+            </div>
+            <div class="company-bar-track">
+              <div class="company-bar-fill" style="width:${Math.round(c.email_count/maxCount*100)}%"></div>
+            </div>
+          </div>`).join('')
+      : `<div class="empty-state">
+           <div class="float-icons">
+             <span class="float-mini">📧</span>
+             <span class="float-mini">📧</span>
+             <span class="float-mini">📧</span>
+           </div>
+           <div class="empty-icon">🗂️</div>
+           <h3>No folders yet</h3>
+         </div>`;
+
+    // Recent emails
+    document.getElementById('recent-emails-list').innerHTML = recent_emails.length
+      ? recent_emails.map(e => `
+          <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid rgba(241,245,249,.9);">
+            <div class="sender-avatar" style="background:${avatarColor(e.sender||'x')}">
+              ${(e.sender||'?')[0].toUpperCase()}
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${esc(e.subject)}
+              </div>
+              <div style="font-size:11px;color:#94a3b8;">
+                ${esc(e.sender)} · <span class="badge badge-blue" style="font-size:10px;">${esc(e.company_name)}</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:#94a3b8;white-space:nowrap;">${fmtDate(e.email_date)}</div>
+          </div>`).join('')
+      : `<div class="empty-state">
+           <div class="float-icons">
+             <span class="float-mini">📧</span>
+             <span class="float-mini">📬</span>
+             <span class="float-mini">✉️</span>
+           </div>
+           <div class="empty-icon">📭</div>
+           <h3>No emails yet</h3>
+         </div>`;
+
+    // Cleanup
+    document.getElementById('cleanup-info').innerHTML = last_cleanup
+      ? `<span class="badge badge-green">✓ Last run: ${fmtDate(last_cleanup.cleanup_date)}</span>
+         &nbsp; Deleted <strong>${last_cleanup.deleted_records}</strong> record(s)`
+      : '<span class="badge badge-gray">No cleanup runs yet</span>';
+
+  } catch (e) {
+    toast(`Dashboard error: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTOMATION TOGGLE
+// ════════════════════════════════════════════════════════════════════════════
+function applyNeonGlow(on) {
+  const widget = document.getElementById('automation-widget');
+  if (!widget) return;
+  widget.classList.toggle('neon-glow', on);
+}
+
+async function toggleAutomation() {
+  const toggleEl  = document.getElementById('automation-toggle');
+  const statusTxt = document.getElementById('automation-status-text');
+
+  try {
+    const data = await api('/agent/toggle', { method: 'PATCH' });
+    const on   = data.automation_enabled;
+    toggleEl.checked      = on;
+    statusTxt.textContent = on ? 'Enabled' : 'Disabled';
+    statusTxt.className   = `automation-status-text ${on ? 'on' : 'off'}`;
+    applyNeonGlow(on);
+    toast(`Automation ${on ? 'enabled' : 'disabled'}.`, on ? 'success' : 'info');
+  } catch (e) {
+    toggleEl.checked = !toggleEl.checked;
+    toast(`Toggle failed: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// AUTO-CREATE FOLDERS TOGGLE
+// ════════════════════════════════════════════════════════════════════════════
+async function syncAutoCreateToggle() {
+  try {
+    const data = await api('/agent/status');
+    applyAutoCreateUI(Boolean(data.auto_create_folders));
+  } catch (_) { /* non-critical */ }
+}
+
+function applyAutoCreateUI(on) {
+  const toggleEl  = document.getElementById('auto-create-toggle');
+  const warningEl = document.getElementById('auto-create-warning');
+  if (toggleEl)  toggleEl.checked = on;
+  if (warningEl) warningEl.style.display = on ? 'none' : 'flex';
+}
+
+async function toggleAutoCreate() {
+  const toggleEl  = document.getElementById('auto-create-toggle');
+  const warningEl = document.getElementById('auto-create-warning');
+
+  const optimisticOn = toggleEl.checked;
+  warningEl.style.display = optimisticOn ? 'none' : 'flex';
+
+  try {
+    const data = await api('/agent/auto-create', { method: 'PATCH' });
+    const on   = data.auto_create_folders;
+    applyAutoCreateUI(on);
+    toast(data.message, on ? 'success' : 'info');
+  } catch (e) {
+    applyAutoCreateUI(!optimisticOn);
+    toast(`Failed: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// FOLDERS
+// ════════════════════════════════════════════════════════════════════════════
+async function loadFolders() {
+  const container = document.getElementById('folder-grid-container');
+  container.innerHTML = '<div class="spinner"></div>';
+
+  syncAutoCreateToggle();
+
+  try {
+    const { companies } = await api('/company');
+    if (!companies.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="float-icons">
+            <span class="float-mini">📧</span>
+            <span class="float-mini">📬</span>
+            <span class="float-mini">✉️</span>
+          </div>
+          <div class="empty-icon">🗂️</div>
+          <h3>No company folders</h3>
+          <p>Create your first folder to start classifying emails</p>
+          <br><button class="btn btn-primary btn-sm ripple-host" onclick="openFolderModal()">＋ Add Folder</button>
+        </div>`;
+      initRipples();
+      return;
+    }
+
+    container.innerHTML = `<div class="folder-grid">${
+      companies.map(c => `
+        <div class="folder-card-wrap">
+          <div class="folder-card">
+            <!-- Front face -->
+            <div class="folder-card-front">
+              <div class="folder-card-header">
+                <div class="folder-icon">🗂️</div>
+              </div>
+              <div class="folder-name">${esc(c.company_name)}</div>
+              <div class="folder-domain">@${esc(c.email_domain)}</div>
+              <div style="margin-top:auto;padding-top:10px;">
+                <div class="folder-count-label" style="font-size:11px;color:#94a3b8;">Hover to manage</div>
+              </div>
+            </div>
+            <!-- Back face -->
+            <div class="folder-card-back" onclick="viewFolderEmails(${c.id}, '${esc(c.company_name)}')">
+              <div class="back-company">📁 ${esc(c.company_name)}</div>
+              <div class="back-domain">@${esc(c.email_domain)}</div>
+              <span class="back-action">View Emails →</span>
+              <span class="back-delete" onclick="event.stopPropagation(); deleteFolder(${c.id}, '${esc(c.company_name)}')">🗑 Delete</span>
+            </div>
+          </div>
+        </div>`).join('')
+    }</div>`;
+
+    initRipples();
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><h3>${esc(e.message)}</h3></div>`;
+  }
+}
+
+function openFolderModal() {
+  document.getElementById('folder-company-name').value = '';
+  document.getElementById('folder-email-domain').value = '';
+  document.getElementById('folder-modal-error').style.display = 'none';
+  document.getElementById('folder-modal').classList.add('open');
+  setTimeout(() => document.getElementById('folder-company-name').focus(), 100);
+}
+function closeFolderModal() {
+  document.getElementById('folder-modal').classList.remove('open');
+}
+
+async function saveFolder() {
+  const company_name = document.getElementById('folder-company-name').value.trim();
+  const email_domain = document.getElementById('folder-email-domain').value.trim();
+  const errEl = document.getElementById('folder-modal-error');
+  const btn   = document.getElementById('folder-save-btn');
+
+  errEl.style.display = 'none';
+  if (!company_name || !email_domain) {
+    errEl.textContent = 'Both fields are required.'; errEl.style.display = 'block'; return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    await api('/company', { method: 'POST', body: JSON.stringify({ company_name, email_domain }) });
+    closeFolderModal();
+    toast(`Folder "${company_name}" created.`, 'success');
+    loadFolders();
+  } catch (e) {
+    errEl.textContent = e.message; errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Folder';
+  }
+}
+
+async function deleteFolder(id, name) {
+  if (!confirm(`Delete folder "${name}"? Emails in this folder will become unclassified.`)) return;
+  try {
+    await api(`/company/${id}`, { method: 'DELETE' });
+    toast(`Folder "${name}" deleted.`, 'success');
+    loadFolders();
+  } catch (e) {
+    toast(`Delete failed: ${e.message}`, 'error');
+  }
+}
+
+function viewFolderEmails(companyId, companyName) {
+  emailsCompanyId  = companyId;
+  emailsPage       = 1;
+  emailsReadFilter = 'all';
+  // Reset pills to "All" active
+  document.querySelectorAll('.filter-pill').forEach(p => p.className = 'filter-pill');
+  document.querySelector('.filter-pill')?.classList.add('active-all');
+  showView('emails');
+  document.getElementById('emails-view-title').textContent    = `📁 ${companyName}`;
+  document.getElementById('emails-view-subtitle').textContent = `Emails classified under ${companyName}`;
+  document.getElementById('emails-clear-filter').style.display = 'inline-flex';
+  updateEmailsBackBtn();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EMAILS
+// ════════════════════════════════════════════════════════════════════════════
+async function loadEmails(page = emailsPage) {
+  emailsPage = page;
+
+  updateEmailsBackBtn();
+
+  if (!emailsCompanyId) {
+    document.getElementById('emails-view-title').textContent    = 'All Emails';
+    document.getElementById('emails-view-subtitle').textContent = 'Loading…';
+    document.getElementById('emails-clear-filter').style.display = 'none';
+  }
+
+  const tbody = document.getElementById('emails-tbody');
+  tbody.innerHTML = '<tr class="loading-row"><td colspan="6"><div class="spinner"></div></td></tr>';
+
+  const readParam = emailsReadFilter !== 'all' ? `&read_filter=${emailsReadFilter}` : '';
+  const endpoint  = emailsCompanyId
+    ? `/emails/company/${emailsCompanyId}?page=${page}&limit=15${readParam}`
+    : `/emails?page=${page}&limit=15${readParam}`;
+
+  try {
+    const data = await api(endpoint);
+    const { emails, pagination, read_stats } = data;
+
+    // Subtitle: "15 emails (10 read, 5 unread)"
+    const totalAll = (read_stats?.read_count || 0) + (read_stats?.unread_count || 0);
+    const statsLine = read_stats
+      ? `${totalAll} email${totalAll !== 1 ? 's' : ''} (${read_stats.read_count} read, ${read_stats.unread_count} unread)`
+      : `${pagination.total} email${pagination.total !== 1 ? 's' : ''}`;
+
+    document.getElementById('emails-view-subtitle').textContent =
+      `${statsLine} · Page ${pagination.page} of ${pagination.pages}`;
+    document.getElementById('emails-read-stats').textContent =
+      read_stats ? `${read_stats.read_count} read · ${read_stats.unread_count} unread` : '';
+
+    if (!emails.length) {
+      tbody.innerHTML = `<tr><td colspan="6">
+        <div class="empty-state">
+          <div class="float-icons">
+            <span class="float-mini">📧</span>
+            <span class="float-mini">📬</span>
+            <span class="float-mini">✉️</span>
+          </div>
+          <div class="empty-icon">📭</div>
+          <h3>No emails found</h3>
+        </div>
+      </td></tr>`;
+      document.getElementById('emails-pagination').innerHTML = '';
+      return;
+    }
+
+    tbody.innerHTML = emails.map(e => {
+      const initials    = (e.sender || '?')[0].toUpperCase();
+      const color       = avatarColor(e.sender || 'x');
+      const senderParts = parseSender(e.sender || '');
+      const isRead      = Boolean(e.is_read);
+      return `<tr style="${isRead ? '' : 'font-weight:600;'}">
+        <td>
+          <div class="sender-cell">
+            <div class="sender-avatar" style="background:${color}">${initials}</div>
+            <div>
+              <div class="sender-name">${esc(senderParts.name)}</div>
+              <div class="sender-email">${esc(senderParts.email)}</div>
+            </div>
+          </div>
+        </td>
+        <td style="max-width:240px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${esc(e.subject)}
+        </td>
+        <td>
+          <span class="badge ${e.company_name === 'Unclassified' ? 'badge-gray' : 'badge-blue'}">
+            ${esc(e.company_name || 'Unclassified')}
+          </span>
+        </td>
+        <td>
+          <span class="badge ${isRead ? 'badge-read' : 'badge-unread'}">
+            ${isRead ? '✓ Read' : '● Unread'}
+          </span>
+        </td>
+        <td style="white-space:nowrap;font-size:12px;color:#64748b;">${fmtDate(e.email_date)}</td>
+        <td style="text-align:center;">${e.has_attachments ? '📎' : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    renderPagination(pagination);
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:32px;color:#ef4444;">${esc(e.message)}</td></tr>`;
+    toast(`Emails error: ${e.message}`, 'error');
+  }
+}
+
+function parseSender(raw) {
+  const match = raw.match(/^(.*?)\s*<(.+)>$/);
+  if (match) return { name: match[1].trim() || match[2], email: match[2] };
+  return { name: raw, email: '' };
+}
+
+function renderPagination({ page, pages }) {
+  const el = document.getElementById('emails-pagination');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  if (page > 1)     html += `<button class="btn btn-secondary btn-sm ripple-host" onclick="loadEmails(${page-1})">← Prev</button>`;
+  html += `<span style="font-size:13px;color:#64748b;padding:8px;">Page ${page} / ${pages}</span>`;
+  if (page < pages) html += `<button class="btn btn-primary btn-sm ripple-host" onclick="loadEmails(${page+1})">Next →</button>`;
+  el.innerHTML = html;
+  initRipples();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// EXCEL EXPORT
+// ════════════════════════════════════════════════════════════════════════════
+async function doExport() {
+  toast('Generating Excel file…', 'info');
+  try {
+    const endpoint = emailsCompanyId
+      ? `/export/excel?company_id=${emailsCompanyId}`
+      : '/export/excel';
+
+    const token = getToken();
+    const res   = await fetch(`${API}${endpoint}`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+      throw new Error(err.message);
+    }
+
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const fnMatch     = disposition.match(/filename="?([^"]+)"?/);
+    const filename    = fnMatch ? fnMatch[1] : 'SmartMail_Export.xlsx';
+    const rowCount    = res.headers.get('X-Row-Count') || '?';
+
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast(`Downloaded ${filename} (${rowCount} rows)`, 'success');
+  } catch (e) {
+    toast(`Export failed: ${e.message}`, 'error');
+  }
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ════════════════════════════════════════════════════════════════════════════
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modal on overlay click
+document.getElementById('folder-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeFolderModal();
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// INIT — auto-login if token exists
+// ════════════════════════════════════════════════════════════════════════════
+(function init() {
+  if (getToken() && loadUser()) {
+    bootApp();
+  }
+})();
+</script>
+</body>
+</html>
