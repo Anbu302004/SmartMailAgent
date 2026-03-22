@@ -59,14 +59,24 @@ async function parseRawEmail(rawBuffer) {
   const cc  = extractAddresses(parsed.cc);
   const bcc = extractAddresses(parsed.bcc);
 
-  // ── Attachments (metadata only — no binary content) ─────────────────────
-  const attachments = (parsed.attachments ?? []).map((att) => ({
-    filename:    att.filename    || null,
-    contentType: att.contentType || null,
-    size:        att.size        || 0,          // bytes
-    contentId:   att.contentId   || null,       // for inline images
-    disposition: att.contentDisposition || null,
-  }));
+  // // ── Attachments (metadata only — no binary content) ─────────────────────
+  // const attachments = (parsed.attachments ?? []).map((att) => ({
+  //   filename:    att.filename    || null,
+  //   contentType: att.contentType || null,
+  //   size:        att.size        || 0,          // bytes
+  //   contentId:   att.contentId   || null,       // for inline images
+  //   disposition: att.contentDisposition || null,
+  // }));
+
+  // ── Attachments (metadata + content for saving) ──────────────────────────
+const attachments = (parsed.attachments ?? []).map((att) => ({
+  filename:    att.filename    || null,
+  contentType: att.contentType || null,
+  size:        att.size        || 0,
+  contentId:   att.contentId   || null,
+  disposition: att.contentDisposition || null,
+  content:     att.content     || null,  // actual file buffer
+}));
 
   // Strip all HTML tags completely, then limit lengths to avoid max_allowed_packet errors
   const stripHtml   = (str) => (str || '').replace(/<[^>]*>/g, '').trim();

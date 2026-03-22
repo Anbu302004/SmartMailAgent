@@ -25,13 +25,31 @@ const CompanyModel = {
     return rows;
   },
 
-  findByDomainAndUser: async (emailDomain, userId) => {
-    const [rows] = await db.execute(
+  // findByDomainAndUser: async (emailDomain, userId) => {
+  //   const [rows] = await db.execute(
+  //     'SELECT * FROM companies WHERE email_domain = ? AND user_id = ? LIMIT 1',
+  //     [emailDomain, userId]
+  //   );
+  //   return rows[0] || null;
+  // },
+
+  findByDomainAndUser: async (emailDomain, userId, senderEmail = null) => {
+  // First check exact full email match (e.g. moshika26@gmail.com)
+  if (senderEmail) {
+    const [exactRows] = await db.execute(
       'SELECT * FROM companies WHERE email_domain = ? AND user_id = ? LIMIT 1',
-      [emailDomain, userId]
+      [senderEmail, userId]
     );
-    return rows[0] || null;
-  },
+    if (exactRows[0]) return exactRows[0];
+  }
+
+  // Then check domain match (e.g. gmail.com)
+  const [rows] = await db.execute(
+    'SELECT * FROM companies WHERE email_domain = ? AND user_id = ? LIMIT 1',
+    [emailDomain, userId]
+  );
+  return rows[0] || null;
+},
 
   delete: async (id, userId) => {
     const [result] = await db.execute(

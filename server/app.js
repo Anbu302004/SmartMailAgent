@@ -15,7 +15,10 @@ const cleanupAgent        = require('./agents/cleanupAgent');
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: ['http://localhost:3000', 'https://project.harikaran.com'],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

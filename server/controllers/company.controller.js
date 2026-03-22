@@ -8,7 +8,7 @@ const create = async (req, res, next) => {
       return res.status(400).json({ message: 'company_name and email_domain are required' });
     }
 
-    const domainPattern = /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+   const domainPattern = /^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$/;
     if (!domainPattern.test(email_domain)) {
       return res.status(400).json({ message: 'email_domain must be a valid domain (e.g. hcl.com)' });
     }

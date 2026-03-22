@@ -24,14 +24,7 @@ db.getConnection()
     } catch (migErr) {
       console.warn('[DB] Migration warning:', migErr.message);
     }
-    try {
-      await conn.execute(
-        'UPDATE agent_settings SET last_fetched_uid = 0 WHERE last_fetched_uid = 2971'
-      );
-      console.log('[DB] Reset: last_fetched_uid cleared for full re-fetch.');
-    } catch (resetErr) {
-      console.warn('[DB] Reset warning:', resetErr.message);
-    }
+     
     conn.release();
   })
   .catch(err => {

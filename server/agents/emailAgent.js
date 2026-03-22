@@ -26,9 +26,9 @@ const CompanyModel        = require('../models/company.model');
 
 const LOG_PREFIX    = '[EmailAgent]';
 const DEFAULT_CRON  = '*/1 * * * *';   // every 1 minute
-const FETCH_LIMIT   = 500;             // max emails to process per cycle
+const FETCH_LIMIT   = 50;             // max emails to process per cycle
 const IMAP_UID_CAP  = 1000;            // max UIDs pulled from IMAP per cycle
-const BATCH_SIZE    = 50;              // UIDs per parallel IMAP connection
+const BATCH_SIZE    = 5;              // UIDs per parallel IMAP connection
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -172,10 +172,14 @@ function buildClassifiedEmail(email, userId, company, status) {
     // ── Read status ───────────────────────────────────────────────────────
     is_read:          email.isRead || false,   // mirrors IMAP \Seen flag
 
-    // ── Attachment metadata ───────────────────────────────────────────────
-    has_attachments:  email.hasAttachments,
-    attachments:      email.attachments,    // array of metadata objects
+    // // ── Attachment metadata ───────────────────────────────────────────────
+    // has_attachments:  email.hasAttachments,
+    // attachments:      email.attachments,    // array of metadata objects
 
+    // ── Attachment metadata ───────────────────────────────────────────────
+has_attachments:     email.hasAttachments,
+attachments:         (email.attachments || []).map(a => a.filename).filter(Boolean),
+attachment_contents: email.attachments || [],
     // ── Agent audit ───────────────────────────────────────────────────────
     classified_at: new Date(),
   };
@@ -219,7 +223,7 @@ async function processUser(userId, autoCreate = true) {
   }
 
   // Take the newest IMAP_UID_CAP UIDs from the full list, then cap at FETCH_LIMIT
-  const targetUids = allUids.slice(-IMAP_UID_CAP).slice(-FETCH_LIMIT);
+  const targetUids = allUids.slice(0, FETCH_LIMIT);
   log(`User ${userId}: ${allUids.length} new UID(s), fetching ${targetUids.length} in parallel batches of ${BATCH_SIZE} …`);
 
   // ── 3. Split into batches and fetch in parallel ──────────────────────────
@@ -312,15 +316,15 @@ async function runCycle() {
     // ────────────────────────────────────────────────────────────────────
   }
 
-  // ── Purge empty company folders for every processed user ────────────────
-  for (const { user_id: userId } of enabledUsers) {
-    try {
-      const removed = await CompanyModel.deleteEmpty(userId);
-      if (removed > 0) log(`User ${userId}: removed ${removed} empty folder(s).`);
-    } catch (cleanErr) {
-      warn(`User ${userId}: empty-folder cleanup failed — ${cleanErr.message}`);
-    }
-  }
+  // // ── Purge empty company folders for every processed user ────────────────
+  // for (const { user_id: userId } of enabledUsers) {
+  //   try {
+  //     const removed = await CompanyModel.deleteEmpty(userId);
+  //     if (removed > 0) log(`User ${userId}: removed ${removed} empty folder(s).`);
+  //   } catch (cleanErr) {
+  //     warn(`User ${userId}: empty-folder cleanup failed — ${cleanErr.message}`);
+  //   }
+  // }
 
   log(`─── Cycle complete — ${report.totalClassified} email(s) classified across ${report.users} user(s). ───`);
   return report;

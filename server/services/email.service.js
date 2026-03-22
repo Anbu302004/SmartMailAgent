@@ -26,23 +26,23 @@ function toDbRow(classified) {
   const messageId = classified.message_id || fallbackMessageId(classified);
 
   const attachmentNames = (classified.attachments || [])
-    .map((a) => a.filename)
+    .filter(name => typeof name === 'string')
     .filter(Boolean);
 
   return {
-    message_id:       messageId,
-    user_id:          classified.user_id,
-    company_id:       classified.company_id || null,
-    sender:           formatSender(classified.sender_name, classified.sender_email),
-    receiver:         classified.receiver   || null,
-    subject:          classified.subject    || '(no subject)',
-    description:      classified.body_text  || null,
-    attachment_names: attachmentNames.length ? attachmentNames : null,
-    is_read:          classified.is_read    || false,
-    email_date:       classified.received_at || null,
+    message_id:          messageId,
+    user_id:             classified.user_id,
+    company_id:          classified.company_id || null,
+    sender:              formatSender(classified.sender_name, classified.sender_email),
+    receiver:            classified.receiver   || null,
+    subject:             classified.subject    || '(no subject)',
+    description:         classified.body_text  || null,
+    attachment_names:    attachmentNames.length ? attachmentNames : null,
+    attachment_contents: classified.attachment_contents || [],
+    is_read:             classified.is_read    || false,
+    email_date:          classified.received_at || null,
   };
 }
-
 /**
  * Paginate helper — clamps values to safe ranges.
  */
@@ -69,7 +69,24 @@ const EmailService = {
 
     for (const classified of classifiedEmails) {
       try {
-        const row     = toDbRow(classified);
+        const row = toDbRow(classified);
+
+        // Save attachment files to disk
+        const fs   = require('fs');
+        const path = require('path');
+        if (classified.attachment_contents && classified.attachment_contents.length) {
+          for (const att of classified.attachment_contents) {
+            if (att.content && att.filename) {
+              const safeName = (row.message_id || 'unknown').replace(/[^a-z0-9]/gi, '_');
+              const dir = path.join(__dirname, '..', 'uploads', 'attachments',
+                String(classified.user_id), safeName
+              );
+              fs.mkdirSync(dir, { recursive: true });
+              fs.writeFileSync(path.join(dir, att.filename), att.content);
+            }
+          }
+        }
+
         const inserted = await EmailModel.saveMany([row]);
         if (inserted > 0) saved++;
         else              skipped++;   // duplicate
