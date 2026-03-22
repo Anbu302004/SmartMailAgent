@@ -816,9 +816,9 @@
 'use strict';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const API = window.location.hostname === 'localhost' 
+const API = window.location.hostname === 'localhost'
   ? 'http://localhost:3000/api'
-  : 'https://project.harikaran.com/api';
+  : window.location.origin + '/api';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let currentUser       = null;
