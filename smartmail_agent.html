@@ -13,7 +13,7 @@
       font-family: 'Segoe UI', system-ui, sans-serif;
       color: #1e293b;
       min-height: 100vh;
-      background: linear-gradient(-45deg, #e8f0fe, #f0f9ff, #ecfdf5, #f0f4f8, #eef2ff);
+      background: linear-gradient(-45deg, #00c6ff, #0072ff, #00dbde, #fc00ff, #38ef7d);
       background-size: 400% 400%;
       animation: gradientShift 18s ease infinite;
       position: relative;
@@ -661,16 +661,17 @@
 
         <div class="grid-2">
           <!-- Company breakdown -->
-          <div class="card">
-            <div class="card-header">
-              <div>
-                <div class="card-title">Company Breakdown</div>
-                <div class="card-subtitle">Emails per folder</div>
-              </div>
-            </div>
-            <div id="company-bars"><div class="spinner"></div></div>
-          </div>
-
+   <div class="card">
+  <div class="card-header">
+    <div>
+      <div class="card-title">Company Breakdown</div>
+      <div class="card-subtitle">Emails per folder</div>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;" id="company-bars-page-info"></div>
+  </div>
+  <div id="company-bars"><div class="spinner"></div></div>
+  <div id="company-bars-pagination" style="display:flex;gap:8px;justify-content:flex-end;padding-top:14px;"></div>
+</div>
           <!-- Recent emails -->
           <div class="card">
             <div class="card-header">
@@ -1152,28 +1153,57 @@ async function loadDashboard() {
     statusTxt.className   = `automation-status-text ${summary.automation_enabled ? 'on' : 'off'}`;
     applyNeonGlow(summary.automation_enabled);
 
-    // Company bars
-    const maxCount = Math.max(...company_stats.map(c => c.email_count), 1);
-    document.getElementById('company-bars').innerHTML = company_stats.length
-      ? company_stats.map(c => `
-          <div class="company-bar-item">
-            <div class="company-bar-header">
-              <span class="company-bar-name">🗂️ ${esc(c.company_name)}</span>
-              <span class="company-bar-count">${c.email_count}</span>
-            </div>
-            <div class="company-bar-track">
-              <div class="company-bar-fill" style="width:${Math.round(c.email_count/maxCount*100)}%"></div>
-            </div>
-          </div>`).join('')
-      : `<div class="empty-state">
-           <div class="float-icons">
-             <span class="float-mini">📧</span>
-             <span class="float-mini">📧</span>
-             <span class="float-mini">📧</span>
-           </div>
-           <div class="empty-icon">🗂️</div>
-           <h3>No folders yet</h3>
-         </div>`;
+   // Company bars with pagination
+    const BARS_PER_PAGE = 10;
+    window._companyStatsCache = company_stats;
+
+    function renderCompanyBars(stats, page) {
+      const maxCount   = Math.max(...stats.map(c => c.email_count), 1);
+      const totalPages = Math.ceil(stats.length / BARS_PER_PAGE);
+      const slice      = stats.slice((page - 1) * BARS_PER_PAGE, page * BARS_PER_PAGE);
+
+      document.getElementById('company-bars-page-info').textContent =
+        stats.length > BARS_PER_PAGE ? `Page ${page} of ${totalPages}` : '';
+
+      document.getElementById('company-bars').innerHTML = slice.length
+        ? slice.map(c => `
+            <div class="company-bar-item">
+              <div class="company-bar-header">
+                <span class="company-bar-name">🗂️ ${esc(c.company_name)}</span>
+                <span class="company-bar-count">${c.email_count}</span>
+              </div>
+              <div class="company-bar-track">
+                <div class="company-bar-fill" style="width:${Math.round(c.email_count/maxCount*100)}%"></div>
+              </div>
+            </div>`).join('')
+        : `<div class="empty-state">
+             <div class="float-icons">
+               <span class="float-mini">📧</span>
+               <span class="float-mini">📧</span>
+               <span class="float-mini">📧</span>
+             </div>
+             <div class="empty-icon">🗂️</div>
+             <h3>No folders yet</h3>
+           </div>`;
+
+      const pag = document.getElementById('company-bars-pagination');
+      if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+      let html = '';
+      if (page > 1)
+        html += `<button class="btn btn-secondary btn-sm ripple-host" onclick="window._changeCompanyBarsPage(${page - 1})">← Prev</button>`;
+      html += `<span style="font-size:12px;color:#64748b;padding:7px 6px;">${page} / ${totalPages}</span>`;
+      if (page < totalPages)
+        html += `<button class="btn btn-primary btn-sm ripple-host" onclick="window._changeCompanyBarsPage(${page + 1})">Next →</button>`;
+      pag.innerHTML = html;
+      initRipples();
+    }
+
+    window._changeCompanyBarsPage = function(page) {
+      if (window._companyStatsCache) renderCompanyBars(window._companyStatsCache, page);
+    };
+
+    renderCompanyBars(company_stats, 1);
 
     // Recent emails
     document.getElementById('recent-emails-list').innerHTML = recent_emails.length
@@ -1212,7 +1242,6 @@ async function loadDashboard() {
     toast(`Dashboard error: ${e.message}`, 'error');
   }
 }
-
 // ════════════════════════════════════════════════════════════════════════════
 // AUTOMATION TOGGLE
 // ════════════════════════════════════════════════════════════════════════════
